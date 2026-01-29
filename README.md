@@ -50,6 +50,7 @@ use {
 | `:PsKillLine` | Kill the process on the current line |
 | `:PsKillAllLines` | Kill all processes in the selected range |
 | `:PsKillWord` | Kill the process with PID under cursor |
+| `:PsInspect` | Open detailed inspector for current process |
 | `:PsOpenProcLine` | Open `/proc` directory for the process |
 | `:PsFilter` | Set a filter to show only matching processes |
 | `:PsThisBuffer` | Convert current buffer to ps buffer |
@@ -64,7 +65,7 @@ When in a ps buffer:
 | --- | ------ |
 | `r` | Refresh process list |
 | `<C-k>` | Kill process on current line |
-| `K` | Kill process with PID under cursor |
+| `K` | Inspect process (detailed view) |
 | `p` | Open `/proc` directory for process |
 | `q` | Close buffer |
 | `f` or `/` | Filter processes by name |
