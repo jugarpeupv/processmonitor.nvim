@@ -35,9 +35,19 @@ function M.apply()
   vim.cmd([[syntax match lsofPath "/[^ ]*"]])
 
   -- Match network addresses (IP:port)
+  -- IPv4 addresses with port
   vim.cmd([[syntax match lsofNetwork "\d\+\.\d\+\.\d\+\.\d\+:\d\+"]])
+  -- IPv6 addresses in brackets with port [addr]:port
+  vim.cmd([[syntax match lsofNetwork "\[[0-9a-fA-F:]\+\]:\d\+"]])
+  -- IPv6 addresses without brackets (hexadecimal separated by colons)
+  vim.cmd([[syntax match lsofNetwork "\<[0-9a-fA-F]\{1,4\}\(:[0-9a-fA-F]\{1,4\}\)\{2,7\}\>"]])
+  -- Wildcard addresses
   vim.cmd([[syntax match lsofNetwork "\*:\d\+"]])
   vim.cmd([[syntax match lsofNetwork ":\d\+"]])
+  -- Connection arrow
+  vim.cmd([[syntax match lsofArrow "->"]])
+  -- Hexadecimal addresses (like 0x980e78a073a7b9b3)
+  vim.cmd([[syntax match lsofHexAddr "0x[0-9a-fA-F]\+"]])
 
   -- Match states (LISTEN, ESTABLISHED, etc.)
   vim.cmd([[syntax match lsofState "(LISTEN)"]])
@@ -59,6 +69,8 @@ function M.apply()
   vim.cmd([[highlight default link lsofPath Identifier]])
   vim.cmd([[highlight default link lsofNetwork Keyword]])
   vim.cmd([[highlight default link lsofState Statement]])
+  vim.cmd([[highlight default link lsofArrow Operator]])
+  vim.cmd([[highlight default link lsofHexAddr Number]])
 end
 
 function M.setup()
