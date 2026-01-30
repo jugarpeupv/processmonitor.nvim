@@ -5,6 +5,7 @@ A Neovim plugin to view and manage processes from within Neovim.
 ## Features
 
 - View process list output (`ps aux`) in a Neovim buffer
+- View list of open files (`lsof`) in a Neovim buffer with syntax highlighting
 - Kill processes directly from the buffer
 - Kill multiple processes using visual selection
 - Filter processes by name
@@ -43,6 +44,8 @@ use {
 
 ### Commands
 
+#### Process Management (ps)
+
 | Command | Description |
 | ------- | ----------- |
 | `:PS` | Open a new buffer with process list |
@@ -55,11 +58,21 @@ use {
 | `:PsFilter` | Set a filter to show only matching processes |
 | `:PsThisBuffer` | Convert current buffer to ps buffer |
 
+#### Open Files Management (lsof)
+
+| Command | Description |
+| ------- | ----------- |
+| `:Lsof` | Open a new buffer with list of open files |
+| `:LsofRefresh` | Refresh the lsof output |
+| `:LsofFilter` | Set a filter to show only matching entries |
+
 ### Default Keymaps
+
+#### PS Buffer
 
 When in a ps buffer:
 
-#### Normal Mode
+##### Normal Mode
 
 | Key | Action |
 | --- | ------ |
@@ -70,11 +83,23 @@ When in a ps buffer:
 | `q` | Close buffer |
 | `f` or `/` | Filter processes by name |
 
-#### Visual Mode
+##### Visual Mode
 
 | Key | Action |
 | --- | ------ |
 | `<C-k>` | Kill all processes in selection |
+
+#### LSOF Buffer
+
+When in an lsof buffer:
+
+##### Normal Mode
+
+| Key | Action |
+| --- | ------ |
+| `r` | Refresh lsof output |
+| `q` | Close buffer |
+| `f` | Filter lsof output |
 
 ### Filtering
 
@@ -125,6 +150,7 @@ require("ps").setup({
 - Neovim 0.7+
 - `ps` command (available on most Unix-like systems)
 - `kill` command
+- `lsof` command (for `:Lsof` functionality)
 
 ## License
 

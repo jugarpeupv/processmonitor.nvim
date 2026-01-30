@@ -38,3 +38,16 @@ end, {})
 vim.api.nvim_create_user_command("PsInspect", function()
   require("ps").inspect_process()
 end, {})
+
+-- LSOF commands
+vim.api.nvim_create_user_command("Lsof", function()
+  require("ps.lsof").open()
+end, {})
+
+vim.api.nvim_create_user_command("LsofRefresh", function()
+  require("ps.lsof").refresh()
+end, {})
+
+vim.api.nvim_create_user_command("LsofFilter", function()
+  require("ps.lsof").set_filter()
+end, {})
