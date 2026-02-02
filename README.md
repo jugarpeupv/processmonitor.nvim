@@ -77,8 +77,8 @@ When in a ps buffer:
 | Key | Action |
 | --- | ------ |
 | `r` | Refresh process list |
-| `<C-k>` | Kill process on current line |
-| `K` | Inspect process (detailed view) |
+| `K` | Kill process on current line |
+| `I` | Inspect process (detailed view) |
 | `p` | Open `/proc` directory for process |
 | `q` | Close buffer |
 | `f` or `/` | Filter processes by name |
@@ -87,7 +87,7 @@ When in a ps buffer:
 
 | Key | Action |
 | --- | ------ |
-| `<C-k>` | Kill all processes in selection |
+| `K` | Kill all processes in selection |
 
 #### LSOF Buffer
 

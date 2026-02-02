@@ -329,9 +329,9 @@ local function inspect_process()
 	-- Actions
 	table.insert(content, "⌨️  ACTIONS")
 	table.insert(content, "═══════════════════")
-	table.insert(content, "  <C-k>  - Kill this process")
-	table.insert(content, "  r      - Refresh inspector")
-	table.insert(content, "  q      - Close this window")
+	table.insert(content, "  K  - Kill this process")
+	table.insert(content, "  r  - Refresh inspector")
+	table.insert(content, "  q  - Close this window")
 	table.insert(content, "")
 
 	-- Set the content
@@ -346,7 +346,7 @@ local function inspect_process()
 
 	-- Set up keymaps for the inspection buffer
 	local opts = { noremap = true, silent = true, buffer = bufnr }
-	vim.keymap.set("n", "<C-k>", function()
+	vim.keymap.set("n", "K", function()
 		if kill_process(pid) then
 			vim.notify("Process " .. pid .. " killed. Closing inspector.", vim.log.levels.INFO)
 			vim.defer_fn(function()
@@ -381,8 +381,8 @@ local function setup_buffer()
 	local opts = { noremap = true, silent = true, buffer = bufnr }
 
 	vim.keymap.set("n", "r", refresh, opts)
-	vim.keymap.set("n", "<C-k>", kill_line, opts)
-	vim.keymap.set("v", "<C-k>", function()
+	vim.keymap.set("n", "K", kill_line, opts)
+	vim.keymap.set("v", "K", function()
 		-- Get visual selection before exiting
 		local start_line = vim.fn.line("v")
 		local end_line = vim.fn.line(".")
@@ -416,7 +416,7 @@ local function setup_buffer()
 			vim.notify("No processes were killed", vim.log.levels.WARN)
 		end
 	end, opts)
-	vim.keymap.set("n", "K", inspect_process, opts)
+	vim.keymap.set("n", "I", inspect_process, opts)
 	vim.keymap.set("n", "p", open_proc_line, opts)
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
 	vim.keymap.set("n", "f", set_filter, opts)

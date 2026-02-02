@@ -5,9 +5,9 @@
 ### Core Functionality
 - ✅ Display `ps aux` output in a Neovim buffer
 - ✅ Refresh process list with `r` key
-- ✅ Kill single process from current line with `<C-k>`
-- ✅ Kill process by PID under cursor with `K`
-- ✅ Visual mode selection + `<C-k>` to kill multiple processes
+- ✅ Kill single process from current line with `K`
+- ✅ Inspect process (detailed view) with `I`
+- ✅ Visual mode selection + `K` to kill multiple processes
 - ✅ Filter processes by name with `f` or `/` key
 - ✅ Open `/proc` filesystem with `p` key
 - ✅ Close buffer with `q` key
