@@ -16,6 +16,9 @@ function M.apply()
   -- Match %CPU and %MEM (decimal numbers with %)
   vim.cmd([[syntax match psPercent "\s\+\zs\d\+\.\d\+\ze\s"]])
 
+  -- Match RSS (MB) - numbers with MB suffix
+  vim.cmd([[syntax match psRSS "\s\+\zs\d\+\.\d\+MB\ze\s"]])
+
   -- Match process state (like Ss, R, S, etc.)
   vim.cmd([[syntax match psState "\s\+\zs[A-Z][a-z<+sN]*\ze\s"]])
 
@@ -30,6 +33,7 @@ function M.apply()
   vim.cmd([[highlight default link psUser String]])
   vim.cmd([[highlight default link psPID Number]])
   vim.cmd([[highlight default link psPercent Float]])
+  vim.cmd([[highlight default link psRSS Number]])
   vim.cmd([[highlight default link psState Type]])
   vim.cmd([[highlight default link psTime Special]])
   vim.cmd([[highlight default link psCommandPath Identifier]])

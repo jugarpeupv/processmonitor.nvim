@@ -96,6 +96,58 @@ local function refresh()
 		return
 	end
 
+	-- Format the output with proper alignment and RSS in MB
+	local formatted_output = {}
+	for i, line in ipairs(output) do
+		if i == 1 then
+			-- Header line - update RSS to RSS(MB)
+			local header = string.format(
+				"%-15s %6s %5s %4s %10s %10s %4s %5s %8s %9s %s",
+				"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS(MB)", "TT", "STAT", "STARTED", "TIME", "COMMAND"
+			)
+			table.insert(formatted_output, header)
+		else
+			-- Data line - parse and reformat
+			local parts = {}
+			-- Parse fixed columns: USER, PID, %CPU, %MEM, VSZ, RSS, TT, STAT, STARTED, TIME
+			for part in line:gmatch("%S+") do
+				table.insert(parts, part)
+				if #parts >= 11 then
+					break
+				end
+			end
+			
+			-- Get the COMMAND (rest of the line after the first 10 fields)
+			local command = line:match(string.rep("%S+%s+", 10) .. "(.*)")
+			
+			if #parts >= 10 then
+				-- Convert RSS from KB to MB
+				local rss_kb = tonumber(parts[6])
+				local rss_mb = rss_kb and string.format("%.1fMB", rss_kb / 1024) or parts[6]
+				
+				-- Format with proper spacing
+				local formatted = string.format(
+					"%-15s %6s %5s %4s %10s %10s %4s %5s %8s %9s %s",
+					parts[1],  -- USER
+					parts[2],  -- PID
+					parts[3],  -- %CPU
+					parts[4],  -- %MEM
+					parts[5],  -- VSZ
+					rss_mb,    -- RSS (converted to MB)
+					parts[7],  -- TT
+					parts[8],  -- STAT
+					parts[9],  -- STARTED
+					parts[10], -- TIME
+					command or ""  -- COMMAND
+				)
+				table.insert(formatted_output, formatted)
+			else
+				table.insert(formatted_output, line)
+			end
+		end
+	end
+	output = formatted_output
+
 	state.full_output = output
 	local display_lines = apply_filter(output)
 
@@ -199,6 +251,60 @@ local function inspect_process()
 		vim.notify("ERROR: Failed to get process details for PID " .. pid, vim.log.levels.ERROR)
 		return
 	end
+	
+	-- Format the output with proper alignment and RSS in MB
+	local formatted_output = {}
+	for i, line in ipairs(detail_output) do
+		if i == 1 then
+			-- Header line - update RSS to RSS(MB)
+			local header = string.format(
+				"%-15s %6s %5s %4s %10s %10s %4s %5s %8s %9s %s",
+				"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS(MB)", "TT", "STAT", "STARTED", "TIME", "COMMAND"
+			)
+			table.insert(formatted_output, header)
+		else
+			-- Data line - parse and reformat
+			local parts = {}
+			local idx = 1
+			-- Parse fixed columns: USER, PID, %CPU, %MEM, VSZ, RSS, TT, STAT, STARTED, TIME
+			for part in line:gmatch("%S+") do
+				table.insert(parts, part)
+				idx = idx + 1
+				if idx > 10 then
+					break
+				end
+			end
+			
+			-- Get the COMMAND (rest of the line after the first 10 fields)
+			local command = line:match(string.rep("%S+%s+", 10) .. "(.*)")
+			
+			if #parts >= 10 then
+				-- Convert RSS from KB to MB
+				local rss_kb = tonumber(parts[6])
+				local rss_mb = rss_kb and string.format("%.1fMB", rss_kb / 1024) or parts[6]
+				
+				-- Format with proper spacing
+				local formatted = string.format(
+					"%-15s %6s %5s %4s %10s %10s %4s %5s %8s %9s %s",
+					parts[1],  -- USER
+					parts[2],  -- PID
+					parts[3],  -- %CPU
+					parts[4],  -- %MEM
+					parts[5],  -- VSZ
+					rss_mb,    -- RSS (converted to MB)
+					parts[7],  -- TT
+					parts[8],  -- STAT
+					parts[9],  -- STARTED
+					parts[10], -- TIME
+					command or ""  -- COMMAND
+				)
+				table.insert(formatted_output, formatted)
+			else
+				table.insert(formatted_output, line)
+			end
+		end
+	end
+	detail_output = formatted_output
 
 	-- Get parent process info
 	local parent_info = vim.fn.systemlist("ps -p " .. pid .. " -o ppid=,comm=")
