@@ -2,7 +2,7 @@
 -- Add this to your init.lua or plugins configuration
 
 return {
-  "yourusername/ps.nvim",
+  "jugarpeupv/ps.nvim",
   config = function()
     require("ps").setup({
       -- Optional: customize the ps command

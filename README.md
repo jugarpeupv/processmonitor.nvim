@@ -19,7 +19,7 @@ A Neovim plugin to view and manage processes from within Neovim.
 
 ```lua
 {
-  "yourusername/processmonitor.nvim",
+  "jugarpeupv/processmonitor.nvim",
   config = function()
     require("ps").setup({
       -- Optional configuration
@@ -34,7 +34,7 @@ A Neovim plugin to view and manage processes from within Neovim.
 
 ```lua
 use {
-  "yourusername/processmonitor.nvim",
+  "jugarpeupv/processmonitor.nvim",
   config = function()
     require("ps").setup()
   end,
