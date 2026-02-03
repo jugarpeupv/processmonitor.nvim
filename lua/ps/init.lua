@@ -9,8 +9,12 @@ M.config = {
 local state = {
 	bufnr = nil,
 	filter = nil,
+	pid_filter = nil, -- PID to filter by (pin feature)
 	full_output = {},
 	sort_by = nil, -- nil, "cpu", or "mem"
+	auto_reload = false,
+	auto_reload_timer = nil,
+	auto_reload_interval = 2000, -- 2 seconds in milliseconds
 }
 
 function M.setup(opts)
@@ -71,16 +75,35 @@ local function kill_process(pid, silent)
 end
 
 local function apply_filter(lines)
-	if not state.filter or state.filter == "" then
-		return lines
-	end
-
-	local filtered = {}
-	for i, line in ipairs(lines) do
-		if i == 1 or line:lower():find(state.filter:lower(), 1, true) then
-			table.insert(filtered, line)
+	local filtered = lines
+	
+	-- Apply text filter if set
+	if state.filter and state.filter ~= "" then
+		local temp = {}
+		for i, line in ipairs(filtered) do
+			if i == 1 or line:lower():find(state.filter:lower(), 1, true) then
+				table.insert(temp, line)
+			end
 		end
+		filtered = temp
 	end
+	
+	-- Apply PID filter if set
+	if state.pid_filter and state.pid_filter ~= "" then
+		local temp = {}
+		for i, line in ipairs(filtered) do
+			if i == 1 then
+				table.insert(temp, line)
+			else
+				local pid = get_pid_from_line(line)
+				if pid == state.pid_filter then
+					table.insert(temp, line)
+				end
+			end
+		end
+		filtered = temp
+	end
+	
 	return filtered
 end
 
@@ -180,6 +203,29 @@ local function refresh()
 	
 	local display_lines = apply_filter(output)
 
+	-- Build status message
+	local status_parts = {}
+	if state.auto_reload then
+		table.insert(status_parts, string.format("AUTO-RELOAD: ON | Interval: %ds", state.auto_reload_interval / 1000))
+	else
+		table.insert(status_parts, "AUTO-RELOAD: OFF")
+	end
+	
+	if state.filter then
+		table.insert(status_parts, 'TEXT FILTER: "' .. state.filter .. '"')
+	end
+	
+	if state.pid_filter then
+		table.insert(status_parts, "PID FILTER: " .. state.pid_filter)
+	end
+	
+	local status_message = "[ " .. table.concat(status_parts, " | ") .. " | Press 'gl' to toggle | Press 'g?' for help ]"
+
+	-- Always add header
+	table.insert(display_lines, 1, "")
+	table.insert(display_lines, 1, status_message)
+	table.insert(display_lines, 1, string.rep("═", 100))
+
 	vim.bo[state.bufnr].modifiable = true
 	vim.api.nvim_buf_set_lines(state.bufnr, 0, -1, false, display_lines)
 	vim.bo[state.bufnr].modifiable = false
@@ -261,6 +307,30 @@ local function set_filter()
 			vim.notify("Filter cleared", vim.log.levels.INFO)
 		end
 	end)
+end
+
+local function toggle_pid_filter()
+	-- If already filtering by PID, clear the filter
+	if state.pid_filter then
+		state.pid_filter = nil
+		vim.notify("PID filter cleared", vim.log.levels.INFO)
+		refresh()
+		return
+	end
+	
+	-- Get PID from current line
+	local line = vim.api.nvim_get_current_line()
+	local pid = get_pid_from_line(line)
+	
+	if not pid or pid == "" then
+		vim.notify("No valid PID found on current line", vim.log.levels.ERROR)
+		return
+	end
+	
+	-- Set PID filter
+	state.pid_filter = pid
+	vim.notify("Filtering by PID: " .. pid .. " (Press 'F' again to clear)", vim.log.levels.INFO)
+	refresh()
 end
 
 local function sort_by_cpu()
@@ -514,6 +584,117 @@ local function inspect_process()
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
 end
 
+local function show_help()
+	-- Define help content with keymaps and descriptions
+	local help_lines = {
+		"╔══════════════════════════════════════════════════════════════════════╗",
+		"║                     PROCESS MONITOR - KEYBINDINGS                    ║",
+		"╚══════════════════════════════════════════════════════════════════════╝",
+		"",
+		"  REFRESH & VIEW",
+		"  ──────────────",
+		"  r       - Refresh the process list",
+		"  gl      - Toggle auto-reload (every 2 seconds)",
+		"  f       - Set/clear filter",
+		"  F       - Toggle PID filter (pin/unpin current process)",
+		"  gC      - Sort by CPU usage (highest first)",
+		"  gm      - Sort by memory usage (highest first)",
+		"",
+		"  PROCESS ACTIONS",
+		"  ───────────────",
+		"  K       - Kill process on current line",
+		"  K       - (Visual mode) Kill multiple selected processes",
+		"  I       - Inspect process details (detailed view)",
+		"  p       - Open /proc/<pid> directory (Linux only)",
+		"",
+		"  HELP & EXIT",
+		"  ───────────",
+		"  g?      - Show this help",
+		"  q       - Close the process monitor",
+		"",
+		"",
+		"  Press 'q' or <Esc> to close this help window",
+		"",
+	}
+
+	-- Create floating window
+	local width = 74
+	local height = #help_lines
+	local buf = vim.api.nvim_create_buf(false, true)
+	
+	-- Calculate center position
+	local ui = vim.api.nvim_list_uis()[1]
+	local win_width = ui.width
+	local win_height = ui.height
+	local col = math.floor((win_width - width) / 2)
+	local row = math.floor((win_height - height) / 2)
+
+	-- Set buffer content
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, help_lines)
+	vim.bo[buf].modifiable = false
+	vim.bo[buf].buftype = "nofile"
+	vim.bo[buf].bufhidden = "wipe"
+
+	-- Create the floating window
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		col = col,
+		row = row,
+		style = "minimal",
+		border = "rounded",
+	})
+
+	-- Set window options
+	vim.wo[win].winblend = 0
+	vim.wo[win].wrap = false
+
+	-- Set up keymaps to close the help window
+	local close_opts = { noremap = true, silent = true, buffer = buf }
+	vim.keymap.set("n", "q", "<cmd>close<CR>", close_opts)
+	vim.keymap.set("n", "<Esc>", "<cmd>close<CR>", close_opts)
+	vim.keymap.set("n", "g?", "<cmd>close<CR>", close_opts)
+end
+
+local function toggle_auto_reload()
+	state.auto_reload = not state.auto_reload
+	
+	if state.auto_reload then
+		-- Start auto-reload
+		if state.auto_reload_timer then
+			state.auto_reload_timer:stop()
+		end
+		
+		state.auto_reload_timer = vim.loop.new_timer()
+		state.auto_reload_timer:start(state.auto_reload_interval, state.auto_reload_interval, vim.schedule_wrap(function()
+			if state.auto_reload and state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) then
+				refresh()
+			else
+				-- Stop timer if buffer is invalid or auto-reload was disabled
+				if state.auto_reload_timer then
+					state.auto_reload_timer:stop()
+					state.auto_reload_timer = nil
+				end
+				state.auto_reload = false
+			end
+		end))
+		
+		vim.notify("Auto-reload enabled (every " .. (state.auto_reload_interval / 1000) .. "s)", vim.log.levels.INFO)
+		-- Refresh immediately to show the indicator
+		refresh()
+	else
+		-- Stop auto-reload
+		if state.auto_reload_timer then
+			state.auto_reload_timer:stop()
+			state.auto_reload_timer = nil
+		end
+		vim.notify("Auto-reload disabled", vim.log.levels.INFO)
+		-- Refresh immediately to remove the indicator
+		refresh()
+	end
+end
+
 local function setup_buffer()
 	local bufnr = vim.api.nvim_create_buf(false, true)
 	state.bufnr = bufnr
@@ -571,8 +752,23 @@ local function setup_buffer()
 	vim.keymap.set("n", "p", open_proc_line, opts)
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
 	vim.keymap.set("n", "f", set_filter, opts)
+	vim.keymap.set("n", "F", toggle_pid_filter, opts)
 	vim.keymap.set("n", "gC", sort_by_cpu, opts)
 	vim.keymap.set("n", "gm", sort_by_mem, opts)
+	vim.keymap.set("n", "gl", toggle_auto_reload, opts)
+	vim.keymap.set("n", "g?", show_help, opts)
+
+	-- Clean up auto-reload timer when buffer is closed
+	vim.api.nvim_create_autocmd("BufWipeout", {
+		buffer = bufnr,
+		callback = function()
+			if state.auto_reload_timer then
+				state.auto_reload_timer:stop()
+				state.auto_reload_timer = nil
+			end
+			state.auto_reload = false
+		end,
+	})
 
 	return bufnr
 end
@@ -583,6 +779,7 @@ function M.open()
 	vim.api.nvim_win_set_buf(0, bufnr)
 	vim.wo.wrap = false
 	state.filter = nil
+	state.pid_filter = nil
 	state.sort_by = nil
 	refresh()
 end
@@ -592,6 +789,7 @@ function M.open_this_buffer()
 	setup_buffer()
 	vim.wo.wrap = false
 	state.filter = nil
+	state.pid_filter = nil
 	state.sort_by = nil
 	refresh()
 end

@@ -9,8 +9,11 @@ A Neovim plugin to view and manage processes from within Neovim.
 - Kill processes directly from the buffer
 - Kill multiple processes using visual selection
 - Filter processes by name
+- Pin/filter by specific PID (toggle on/off)
 - Sort processes by CPU or memory usage
+- Auto-reload process list (toggle on/off)
 - Refresh process list
+- Inspect detailed process information
 - Open `/proc` filesystem for processes (Linux)
 
 ## Installation
@@ -82,9 +85,12 @@ When in a ps buffer:
 | `I` | Inspect process (detailed view) |
 | `p` | Open `/proc` directory for process |
 | `q` | Close buffer |
-| `f` or `/` | Filter processes by name |
+| `f` | Filter processes by name |
+| `F` | Toggle PID filter (pin/unpin current process) |
 | `gC` | Sort by CPU usage (highest first) |
 | `gm` | Sort by memory usage (highest first) |
+| `gl` | Toggle auto-reload (every 2 seconds) |
+| `g?` | Show help with all keybindings |
 
 ##### Visual Mode
 
@@ -106,17 +112,30 @@ When in an lsof buffer:
 
 ### Filtering
 
-You can filter the process list by name:
+#### Text Filter
 
-1. Press `f` or `/` in the ps buffer
+You can filter the process list by name or other text:
+
+1. Press `f` in the ps buffer
 2. Enter a search term (e.g., "node" to see all Node.js processes)
 3. Press Enter
 
 To clear the filter:
-1. Press `f` or `/`
+1. Press `f`
 2. Clear the input and press Enter
 
 The filter is case-insensitive and searches across the entire process line.
+
+#### PID Filter (Pin Feature)
+
+You can filter to show only a specific process by PID:
+
+1. Move cursor to the line with the process you want to pin
+2. Press `F` to toggle the PID filter
+3. The view will now show only that specific process
+4. Press `F` again to clear the filter
+
+When a PID filter is active, it will be shown in the status bar at the top of the buffer.
 
 ### Sorting
 
