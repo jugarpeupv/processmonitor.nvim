@@ -219,7 +219,7 @@ local function refresh()
 		table.insert(status_parts, "PID FILTER: " .. state.pid_filter)
 	end
 	
-	local status_message = "[ " .. table.concat(status_parts, " | ") .. " | Press 'gl' to toggle | Press 'g?' for help ]"
+	local status_message = "[ " .. table.concat(status_parts, " | ") .. " | Press 'gl' to toggle auto-reload | Press 'g?' for help ]"
 
 	-- Always add header
 	table.insert(display_lines, 1, "")
