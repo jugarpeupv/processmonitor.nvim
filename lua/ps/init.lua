@@ -458,14 +458,14 @@ local function inspect_process()
 	local cwd = cwd_output[1] or ""
 
 	-- Create a new buffer for inspection
-	local bufnr = vim.api.nvim_create_buf(false, true)
+	local bufnr = vim.api.nvim_create_buf(true, false)
 	vim.bo[bufnr].buftype = "nofile"
-	vim.bo[bufnr].bufhidden = "wipe"
+	vim.bo[bufnr].bufhidden = "hide"
 	vim.bo[bufnr].swapfile = false
 	vim.bo[bufnr].filetype = "psdetail"
 	
-	-- Use unique buffer name with timestamp to avoid conflicts
-	local buf_name = "Process Inspector - PID: " .. pid .. " [" .. os.time() .. "]"
+	-- Use unique buffer name with PID
+	local buf_name = "processmonitor://inspect/" .. pid
 	vim.api.nvim_buf_set_name(bufnr, buf_name)
 
 	-- Build the content
@@ -696,13 +696,13 @@ local function toggle_auto_reload()
 end
 
 local function setup_buffer()
-	local bufnr = vim.api.nvim_create_buf(false, true)
+	local bufnr = vim.api.nvim_create_buf(true, false)
 	state.bufnr = bufnr
 
 	vim.bo[bufnr].buftype = "nofile"
-	vim.bo[bufnr].bufhidden = "wipe"
+	vim.bo[bufnr].bufhidden = "hide"
 	vim.bo[bufnr].swapfile = false
-	vim.api.nvim_buf_set_name(bufnr, "PS")
+	vim.api.nvim_buf_set_name(bufnr, "processmonitor://ps")
 	vim.bo[bufnr].filetype = "ps"
 
 	-- Apply syntax highlighting immediately
@@ -769,13 +769,51 @@ local function setup_buffer()
 			state.auto_reload = false
 		end,
 	})
+	
+	-- Ensure buffer has content when displayed
+	vim.api.nvim_create_autocmd("BufEnter", {
+		buffer = bufnr,
+		callback = function()
+			-- If buffer is empty, refresh it
+			local line_count = vim.api.nvim_buf_line_count(bufnr)
+			if line_count <= 1 then
+				local first_line = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
+				if first_line == "" then
+					refresh()
+				end
+			end
+		end,
+	})
 
 	return bufnr
 end
 
 function M.open()
+	-- Check if PS buffer already exists
+	local existing_bufnr = vim.fn.bufnr("processmonitor://ps")
+	
+	if existing_bufnr ~= -1 and vim.api.nvim_buf_is_valid(existing_bufnr) then
+		-- Buffer exists, check if it's visible in any window
+		for _, win in ipairs(vim.api.nvim_list_wins()) do
+			if vim.api.nvim_win_get_buf(win) == existing_bufnr then
+				-- Buffer is visible, switch focus to that window
+				vim.api.nvim_set_current_win(win)
+				return
+			end
+		end
+		
+		-- Buffer exists but not visible, show it in a new window
+		vim.cmd("split")
+		vim.api.nvim_win_set_buf(0, existing_bufnr)
+		vim.wo.wrap = false
+		state.bufnr = existing_bufnr
+		-- Don't refresh here - buffer already has content
+		return
+	end
+	
+	-- Buffer doesn't exist, create a new one
 	local bufnr = setup_buffer()
-	vim.cmd("new")
+	vim.cmd("split")
 	vim.api.nvim_win_set_buf(0, bufnr)
 	vim.wo.wrap = false
 	state.filter = nil
