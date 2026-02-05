@@ -15,6 +15,7 @@ A Neovim plugin to view and manage processes from within Neovim.
 - Refresh process list
 - Inspect detailed process information
 - Open `/proc` filesystem for processes (Linux)
+- Quick browser access to network ports from process inspector
 
 ## Installation
 
@@ -109,6 +110,21 @@ When in an lsof buffer:
 | `r` | Refresh lsof output |
 | `q` | Close buffer |
 | `f` | Filter lsof output |
+
+#### Process Inspector Buffer
+
+When viewing detailed process information (opened with `I` or `:PsInspect`):
+
+##### Normal Mode
+
+| Key | Action |
+| --- | ------ |
+| `r` | Refresh inspector |
+| `K` | Kill the inspected process |
+| `q` | Close inspector window |
+| `gx` | Open port in browser (when cursor is on a network connection line) |
+
+The `gx` keymap is particularly useful when inspecting processes with network connections. Position your cursor on any line showing a network connection (e.g., `TCP [::1]:4873 (LISTEN)`) and press `gx` to automatically open `http://localhost:<port>` in your default browser.
 
 ### Filtering
 

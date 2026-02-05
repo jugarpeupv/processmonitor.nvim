@@ -562,6 +562,7 @@ local function inspect_process()
 	table.insert(content, "  K  - Kill this process")
 	table.insert(content, "  r  - Refresh inspector")
 	table.insert(content, "  q  - Close this window")
+	table.insert(content, "  gx - Open port in browser (when cursor on network connection)")
 	table.insert(content, "")
 
 	-- Set the content
@@ -572,7 +573,7 @@ local function inspect_process()
 	-- Open the buffer in a new split
 	vim.cmd("belowright vsplit")
 	vim.api.nvim_win_set_buf(0, bufnr)
-	vim.wo.wrap = true
+	vim.wo.wrap = false
 
 	-- Set up keymaps for the inspection buffer
 	local opts = { noremap = true, silent = true, buffer = bufnr }
@@ -591,6 +592,19 @@ local function inspect_process()
 		inspect_process()
 	end, opts)
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
+	vim.keymap.set("n", "gx", function()
+		local line = vim.api.nvim_get_current_line()
+		-- Match patterns like [::1]:4873, localhost:8080, 127.0.0.1:3000, *:8080, etc.
+		local port = line:match("]:%d+") or line:match(":%d+")
+		if port then
+			port = port:match("%d+")
+			local url = "http://localhost:" .. port
+			vim.notify("Opening " .. url .. " in browser...", vim.log.levels.INFO)
+			vim.fn.jobstart({ "open", url }, { detach = true })
+		else
+			vim.notify("No port found on current line", vim.log.levels.WARN)
+		end
+	end, opts)
 end
 
 local function show_help()
