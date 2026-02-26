@@ -4,6 +4,7 @@ M.config = {
 	ps_cmd = "ps aux",
 	kill_cmd = "kill -9",
 	regex_rule = [[\w\+\s\+\zs\d\+\ze]],
+	default_sort = "mem", -- nil, "cpu", or "mem"
 }
 
 local state = {
@@ -11,7 +12,7 @@ local state = {
 	filter = nil,
 	pid_filter = nil, -- PID to filter by (pin feature)
 	full_output = {},
-	sort_by = nil, -- nil, "cpu", or "mem"
+	sort_by = "mem", -- nil, "cpu", or "mem" (overridden by M.config.default_sort)
 	auto_reload = false,
 	auto_reload_timer = nil,
 	auto_reload_interval = 2000, -- 2 seconds in milliseconds
@@ -880,7 +881,7 @@ function M.open()
 	vim.wo.wrap = false
 	state.filter = nil
 	state.pid_filter = nil
-	state.sort_by = nil
+	state.sort_by = M.config.default_sort
 	refresh()
 end
 
@@ -890,7 +891,7 @@ function M.open_this_buffer()
 	vim.wo.wrap = false
 	state.filter = nil
 	state.pid_filter = nil
-	state.sort_by = nil
+	state.sort_by = M.config.default_sort
 	refresh()
 end
 
