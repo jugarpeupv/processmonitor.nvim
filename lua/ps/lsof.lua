@@ -146,6 +146,14 @@ local function inspect_process()
 		return
 	end
 
+	-- Get real memory usage using top (as shown in Activity Monitor)
+	local real_mem_cmd = "top -l 1 -pid " .. pid .. " -stats mem 2>/dev/null | tail -1"
+	local real_mem_output = vim.fn.system(real_mem_cmd)
+	local real_mem = vim.trim(real_mem_output)
+	if real_mem == "" or vim.v.shell_error ~= 0 then
+		real_mem = "N/A"
+	end
+
 	-- Get parent process info
 	local parent_info = vim.fn.systemlist("ps -p " .. pid .. " -o ppid=,comm=")
 
@@ -215,6 +223,10 @@ local function inspect_process()
 	for _, detail_line in ipairs(detail_output) do
 		table.insert(content, detail_line)
 	end
+	table.insert(content, "")
+	table.insert(content, "💾 REAL MEMORY (as in Activity Monitor)")
+	table.insert(content, "═══════════════════")
+	table.insert(content, "Real Memory: " .. real_mem)
 	table.insert(content, "")
 
 	-- Working directory
