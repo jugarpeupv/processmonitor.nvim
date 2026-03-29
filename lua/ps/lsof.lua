@@ -323,7 +323,7 @@ local function inspect_process()
 			end, 500)
 		end
 	end, opts)
-	vim.keymap.set("n", "r", function()
+	vim.keymap.set("n", "R", function()
 		vim.cmd("close")
 		inspect_process()
 	end, opts)
@@ -360,7 +360,7 @@ local function setup_buffer()
 
 	local opts = { noremap = true, silent = true, buffer = bufnr }
 
-	vim.keymap.set("n", "r", refresh, opts)
+	vim.keymap.set("n", "R", refresh, opts)
 	vim.keymap.set("n", "K", kill_line, opts)
 	vim.keymap.set("n", "I", inspect_process, opts)
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)

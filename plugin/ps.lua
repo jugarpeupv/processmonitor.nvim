@@ -35,6 +35,10 @@ vim.api.nvim_create_user_command("PsFilter", function()
 	require("ps").set_filter()
 end, {})
 
+vim.api.nvim_create_user_command("PsPortFilter", function()
+	require("ps").set_port_filter()
+end, {})
+
 vim.api.nvim_create_user_command("PsInspect", function()
 	require("ps").inspect_process()
 end, {})

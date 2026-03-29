@@ -11,11 +11,15 @@ local state = {
 	bufnr = nil,
 	filter = nil,
 	pid_filter = nil, -- PID to filter by (pin feature)
+	port_filter = nil, -- port number to filter by
 	full_output = {},
 	sort_by = "mem", -- nil, "cpu", or "mem" (overridden by M.config.default_sort)
 	auto_reload = false,
 	auto_reload_timer = nil,
 	auto_reload_interval = 2000, -- 2 seconds in milliseconds
+	-- cached lsof maps; refreshed whenever port_filter is active
+	pid_ports_str = {}, -- { [pid] = "port1,port2" }
+	port_to_pids = {}, -- { [port] = { [pid]=true } }
 }
 
 function M.setup(opts)
@@ -29,6 +33,88 @@ local function get_pid_from_line(line)
 	return match ~= "" and match or nil
 end
 
+-- Runs lsof -i -n -P once and returns two tables:
+--   pid_to_ports : { [pid_str] = "port1,port2,..." }  (deduplicated, sorted)
+--   port_to_pids : { [port_str] = { [pid_str]=true, ... } }
+-- LISTEN ports are placed first in pid_to_ports strings.
+-- Parent PIDs are included in port_to_pids so master processes surface too.
+local function get_network_maps()
+	local pid_to_ports = {}
+	local port_to_pids = {}
+
+	local lsof_lines = vim.fn.systemlist("lsof -i -n -P 2>/dev/null")
+	for i, line in ipairs(lsof_lines) do
+		if i == 1 then goto continue end -- skip header
+
+		local pid = line:match("^%S+%s+(%d+)")
+		if not pid then goto continue end
+
+		-- NAME is the last field but may be followed by "(LISTEN)" or "(ESTABLISHED)"
+		-- Strip the state annotation first, then take the last token as the name field
+		local stripped = line:gsub("%s*%([A-Z]+%)%s*$", "")
+		local name_field = stripped:match("%S+$") or ""
+		-- Extract local part (before "->")
+		local local_part = name_field:match("^([^%-]+)") or name_field
+		-- Extract numeric port at the end of local_part after last ":"
+		local port = local_part:match(":(%d+)$")
+		local is_listen = line:find("%(LISTEN%)") ~= nil
+
+		if port then
+			-- pid_to_ports: deduplicate
+			local existing = pid_to_ports[pid]
+			if not existing then
+				pid_to_ports[pid] = { ports = {}, listen = {} }
+			end
+			local entry = pid_to_ports[pid]
+			if not entry.ports[port] then
+				entry.ports[port] = true
+				if is_listen then
+					table.insert(entry.listen, port)
+				end
+			end
+
+			-- port_to_pids
+			if not port_to_pids[port] then
+				port_to_pids[port] = {}
+			end
+			port_to_pids[port][pid] = true
+
+			-- Also add parent so master processes (e.g. nginx) are included
+			local ppid = vim.trim(vim.fn.system("ps -p " .. pid .. " -o ppid= 2>/dev/null"))
+			if ppid and ppid ~= "" and ppid ~= "0" then
+				port_to_pids[port][ppid] = true
+			end
+		end
+
+		::continue::
+	end
+
+	-- Flatten pid_to_ports into sorted strings: LISTEN ports first, then others
+	local pid_ports_str = {}
+	for pid, entry in pairs(pid_to_ports) do
+		local all_sorted = {}
+		-- listen ports first
+		for _, p in ipairs(entry.listen) do
+			table.insert(all_sorted, p)
+		end
+		-- then non-listen ports (sorted numerically for stability)
+		local non_listen = {}
+		for p in pairs(entry.ports) do
+			local is_l = false
+			for _, lp in ipairs(entry.listen) do
+				if lp == p then is_l = true; break end
+			end
+			if not is_l then table.insert(non_listen, p) end
+		end
+		table.sort(non_listen, function(a, b) return tonumber(a) < tonumber(b) end)
+		for _, p in ipairs(non_listen) do table.insert(all_sorted, p) end
+		pid_ports_str[pid] = table.concat(all_sorted, ",")
+	end
+
+	return pid_ports_str, port_to_pids
+end
+
+-- Inserts a PORTS column right before COMMAND in every line of `lines`.
 local function kill_process(pid, silent)
 	if not pid or pid == "" then
 		if not silent then
@@ -101,6 +187,23 @@ local function apply_filter(lines)
 			else
 				local pid = get_pid_from_line(line)
 				if pid == state.pid_filter then
+					table.insert(temp, line)
+				end
+			end
+		end
+		filtered = temp
+	end
+
+	-- Apply port filter if set: keep only processes that own a socket on that port
+	if state.port_filter and state.port_filter ~= "" then
+		local port_pids = state.port_to_pids[state.port_filter] or {}
+		local temp = {}
+		for i, line in ipairs(filtered) do
+			if i == 1 then
+				table.insert(temp, line)
+			else
+				local pid = get_pid_from_line(line)
+				if pid and port_pids[pid] then
 					table.insert(temp, line)
 				end
 			end
@@ -218,6 +321,14 @@ local function refresh()
 		table.insert(output, 1, header)
 	end
 
+	-- When port filter is active, refresh the lsof maps for apply_filter
+	if state.port_filter and state.port_filter ~= "" then
+		state.pid_ports_str, state.port_to_pids = get_network_maps()
+	else
+		state.pid_ports_str = {}
+		state.port_to_pids = {}
+	end
+
 	local display_lines = apply_filter(output)
 
 	-- Build status message with keymap hints in one line
@@ -236,10 +347,14 @@ local function refresh()
 		table.insert(status_parts, "PIN: " .. state.pid_filter)
 	end
 
+	if state.port_filter then
+		table.insert(status_parts, "PORT: " .. state.port_filter)
+	end
+
 	-- Add keymap hints to the status line
 	table.insert(
 		status_parts,
-		"r:refresh | K:kill | I:inspect | f:filter | F:pin | gC:sort CPU | gm:sort MEM | gl:auto-reload | g?:help | q:quit"
+		"R:refresh | K:kill | I:inspect | f:filter | P:pin | F:port | gC:sort CPU | gm:sort MEM | gl:auto-reload | g?:help | q:quit"
 	)
 
 	local header_line = "[ " .. table.concat(status_parts, " | ") .. " ]"
@@ -352,8 +467,30 @@ local function toggle_pid_filter()
 
 	-- Set PID filter
 	state.pid_filter = pid
-	vim.notify("Filtering by PID: " .. pid .. " (Press 'F' again to clear)", vim.log.levels.INFO)
+	vim.notify("Filtering by PID: " .. pid .. " (Press 'P' again to clear)", vim.log.levels.INFO)
 	refresh()
+end
+
+local function set_port_filter()
+	vim.ui.input({
+		prompt = "Filter by port (empty to clear): ",
+		default = state.port_filter or "",
+	}, function(input)
+		if input == nil then
+			return
+		end
+		if input == "" then
+			state.port_filter = nil
+			refresh()
+			vim.notify("Port filter cleared", vim.log.levels.INFO)
+		elseif input:match("^%d+$") then
+			state.port_filter = input
+			refresh()
+			vim.notify("Filtering by port: " .. input .. " (Press 'F' again to clear)", vim.log.levels.INFO)
+		else
+			vim.notify("Invalid port: enter a number or leave empty to clear", vim.log.levels.WARN)
+		end
+	end)
 end
 
 local function sort_by_cpu()
@@ -608,7 +745,7 @@ local function inspect_process()
 	table.insert(content, "⌨️  ACTIONS")
 	table.insert(content, "═══════════════════")
 	table.insert(content, "  K  - Kill this process")
-	table.insert(content, "  r  - Refresh inspector")
+	table.insert(content, "  R  - Refresh inspector")
 	table.insert(content, "  q  - Close this window")
 	table.insert(content, "  gx - Open port in browser (when cursor on network connection)")
 	table.insert(content, "")
@@ -635,7 +772,7 @@ local function inspect_process()
 			end, 500)
 		end
 	end, opts)
-	vim.keymap.set("n", "r", function()
+	vim.keymap.set("n", "R", function()
 		vim.cmd("close")
 		inspect_process()
 	end, opts)
@@ -662,14 +799,15 @@ local function show_help()
 		"║                     PROCESS MONITOR - KEYBINDINGS                    ║",
 		"╚══════════════════════════════════════════════════════════════════════╝",
 		"",
-		"  REFRESH & VIEW",
-		"  ──────────────",
-		"  r       - Refresh the process list",
-		"  gl      - Toggle auto-reload (every 2 seconds)",
-		"  f       - Set/clear filter",
-		"  F       - Toggle PID filter (pin/unpin current process)",
-		"  gC      - Sort by CPU usage (highest first)",
-		"  gm      - Sort by memory usage (highest first)",
+	"  REFRESH & VIEW",
+	"  ──────────────",
+	"  R       - Refresh the process list",
+	"  gl      - Toggle auto-reload (every 2 seconds)",
+	"  f       - Set/clear text filter",
+	"  P       - Toggle PID filter (pin/unpin current process)",
+	"  F       - Filter by port number (shows processes on that port)",
+	"  gC      - Sort by CPU usage (highest first)",
+	"  gm      - Sort by memory usage (highest first)",
 		"",
 		"  PROCESS ACTIONS",
 		"  ───────────────",
@@ -787,7 +925,7 @@ local function setup_buffer()
 
 	local opts = { noremap = true, silent = true, buffer = bufnr }
 
-	vim.keymap.set("n", "r", refresh, opts)
+	vim.keymap.set("n", "R", refresh, opts)
 	vim.keymap.set("n", "K", kill_line, opts)
 	vim.keymap.set("v", "K", function()
 		-- Get visual selection before exiting
@@ -827,7 +965,8 @@ local function setup_buffer()
 	vim.keymap.set("n", "p", open_proc_line, opts)
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
 	vim.keymap.set("n", "f", set_filter, opts)
-	vim.keymap.set("n", "F", toggle_pid_filter, opts)
+	vim.keymap.set("n", "P", toggle_pid_filter, opts)
+	vim.keymap.set("n", "F", set_port_filter, opts)
 	vim.keymap.set("n", "gC", sort_by_cpu, opts)
 	vim.keymap.set("n", "gm", sort_by_mem, opts)
 	vim.keymap.set("n", "gl", toggle_auto_reload, opts)
@@ -893,6 +1032,7 @@ function M.open()
 	vim.wo.wrap = false
 	state.filter = nil
 	state.pid_filter = nil
+	state.port_filter = nil
 	state.sort_by = M.config.default_sort
 	refresh()
 end
@@ -903,6 +1043,7 @@ function M.open_this_buffer()
 	vim.wo.wrap = false
 	state.filter = nil
 	state.pid_filter = nil
+	state.port_filter = nil
 	state.sort_by = M.config.default_sort
 	refresh()
 end
@@ -929,6 +1070,10 @@ end
 
 function M.set_filter()
 	set_filter()
+end
+
+function M.set_port_filter()
+	set_port_filter()
 end
 
 function M.inspect_process()
