@@ -354,7 +354,7 @@ local function refresh()
 	-- Add keymap hints to the status line
 	table.insert(
 		status_parts,
-		"R:refresh | K:kill | I:inspect | f:filter | P:pin | F:port | gC:sort CPU | gm:sort MEM | gl:auto-reload | g?:help | q:quit"
+		"R:refresh | K:kill | I:inspect | F:filter | P:pin | O:port | gC:sort CPU | gm:sort MEM | gl:auto-reload | g?:help | q:quit"
 	)
 
 	local header_line = "[ " .. table.concat(status_parts, " | ") .. " ]"
@@ -803,9 +803,9 @@ local function show_help()
 	"  ──────────────",
 	"  R       - Refresh the process list",
 	"  gl      - Toggle auto-reload (every 2 seconds)",
-	"  f       - Set/clear text filter",
+	"  F       - Set/clear text filter",
 	"  P       - Toggle PID filter (pin/unpin current process)",
-	"  F       - Filter by port number (shows processes on that port)",
+	"  O       - Filter by port number (shows processes on that port)",
 	"  gC      - Sort by CPU usage (highest first)",
 	"  gm      - Sort by memory usage (highest first)",
 		"",
@@ -964,9 +964,9 @@ local function setup_buffer()
 	vim.keymap.set("n", "I", inspect_process, opts)
 	vim.keymap.set("n", "p", open_proc_line, opts)
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
-	vim.keymap.set("n", "f", set_filter, opts)
+	vim.keymap.set("n", "F", set_filter, opts)
 	vim.keymap.set("n", "P", toggle_pid_filter, opts)
-	vim.keymap.set("n", "F", set_port_filter, opts)
+	vim.keymap.set("n", "O", set_port_filter, opts)
 	vim.keymap.set("n", "gC", sort_by_cpu, opts)
 	vim.keymap.set("n", "gm", sort_by_mem, opts)
 	vim.keymap.set("n", "gl", toggle_auto_reload, opts)
