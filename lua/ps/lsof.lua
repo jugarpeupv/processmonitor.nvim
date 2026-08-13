@@ -295,7 +295,7 @@ local function inspect_process()
 	-- Actions
 	table.insert(content, "⌨️  ACTIONS")
 	table.insert(content, "═══════════════════")
-	table.insert(content, "  K  - Kill this process")
+	table.insert(content, "  X  - Kill this process")
 	table.insert(content, "  r  - Refresh inspector")
 	table.insert(content, "  q  - Close this window")
 	table.insert(content, "  gx - Open port in browser (when cursor on network connection)")
@@ -313,7 +313,7 @@ local function inspect_process()
 
 	-- Set up keymaps for the inspection buffer
 	local opts = { noremap = true, silent = true, buffer = bufnr }
-	vim.keymap.set("n", "K", function()
+	vim.keymap.set("n", "X", function()
 		if kill_process(pid) then
 			vim.notify("Process " .. pid .. " killed. Closing inspector.", vim.log.levels.INFO)
 			vim.defer_fn(function()
@@ -361,8 +361,8 @@ local function setup_buffer()
 	local opts = { noremap = true, silent = true, buffer = bufnr }
 
 	vim.keymap.set("n", "R", refresh, opts)
-	vim.keymap.set("n", "K", kill_line, opts)
-	vim.keymap.set("n", "I", inspect_process, opts)
+	vim.keymap.set("n", "X", kill_line, opts)
+	vim.keymap.set("n", "K", inspect_process, opts)
 	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
 	vim.keymap.set("n", "f", set_filter, opts)
 
