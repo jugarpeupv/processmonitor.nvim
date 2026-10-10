@@ -4,15 +4,20 @@
 
 ### Core Functionality
 - ✅ Display `ps aux` output in a Neovim buffer
-- ✅ Refresh process list with `r` key
-- ✅ Kill single process from current line with `K`
-- ✅ Inspect process (detailed view) with `I`
-- ✅ Visual mode selection + `K` to kill multiple processes
-- ✅ Filter processes by name with `f` or `/` key
+- ✅ Refresh process list with `R` key
+- ✅ Kill single process from current line with `X`
+- ✅ Inspect process (detailed view) with `K`
+- ✅ Visual mode selection + `X` to kill multiple processes
+- ✅ Filter processes by name with `F` key
+- ✅ Pin/filter by PID with `P` key
+- ✅ Filter by network port with `O` key
 - ✅ Sort processes by CPU usage with `gC` key
 - ✅ Sort processes by memory usage with `gm` key
+- ✅ Toggle auto-reload with `gl` key
+- ✅ Show help with `g?` key
 - ✅ Open `/proc` filesystem with `p` key
 - ✅ Close buffer with `q` key
+- ✅ Customizable keymaps for ps buffer, lsof buffer, and process inspector buffer
 
 ### Implementation Details
 - Written in pure Lua for Neovim
@@ -30,7 +35,9 @@
 - `:PsKillLine` - Kill process on current line
 - `:PsKillAllLines` - Kill selected processes (visual mode)
 - `:PsKillWord` - Kill process by PID under cursor
+- `:PsInspect` - Open detailed inspector for current process
 - `:PsFilter` - Set process name filter
+- `:PsPortFilter` - Filter processes by network port
 - `:PsOpenProcLine` - Open /proc directory
 - `:PsThisBuffer` - Convert current buffer to ps buffer
 
@@ -40,6 +47,34 @@ require("ps").setup({
   ps_cmd = "ps aux",              -- Customize ps command
   kill_cmd = "kill -9",           -- Customize kill command
   regex_rule = [[\w\+\s\+\zs\d\+\ze]], -- PID extraction pattern
+  default_sort = "mem",           -- Default sort: "mem", "cpu", or nil
+  ps_buffer_keymaps = {           -- Customizable ps buffer keymaps
+    refresh = "R",
+    kill = "X",
+    inspect = "K",
+    open_proc = "p",
+    quit = "q",
+    filter = "F",
+    pin = "P",
+    port = "O",
+    sort_cpu = "gC",
+    sort_mem = "gm",
+    auto_reload = "gl",
+    help = "g?",
+  },
+  lsof_keymaps = {                -- Customizable lsof buffer keymaps
+    refresh = "R",
+    kill = "X",
+    inspect = "K",
+    filter = "f",
+    quit = "q",
+  },
+  inspector_keymaps = {           -- Customizable inspector buffer keymaps
+    refresh = "R",
+    kill = "X",
+    quit = "q",
+    open_url = "gx",
+  },
 })
 ```
 

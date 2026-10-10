@@ -149,4 +149,92 @@ describe("ps.nvim", function()
       end
     end)
   end)
+
+  describe("keymap configuration", function()
+    it("should provide default keymaps", function()
+      ps.setup()
+      assert.is_table(ps.config.ps_buffer_keymaps)
+      assert.equals("R", ps.config.ps_buffer_keymaps.refresh)
+      assert.equals("X", ps.config.ps_buffer_keymaps.kill)
+      assert.equals("K", ps.config.ps_buffer_keymaps.inspect)
+      assert.equals("p", ps.config.ps_buffer_keymaps.open_proc)
+      assert.equals("q", ps.config.ps_buffer_keymaps.quit)
+      assert.equals("F", ps.config.ps_buffer_keymaps.filter)
+      assert.equals("P", ps.config.ps_buffer_keymaps.pin)
+      assert.equals("O", ps.config.ps_buffer_keymaps.port)
+      assert.equals("gC", ps.config.ps_buffer_keymaps.sort_cpu)
+      assert.equals("gm", ps.config.ps_buffer_keymaps.sort_mem)
+      assert.equals("gl", ps.config.ps_buffer_keymaps.auto_reload)
+      assert.equals("g?", ps.config.ps_buffer_keymaps.help)
+    end)
+
+    it("should allow partial overrides of ps_buffer_keymaps while keeping defaults", function()
+      ps.setup({
+        ps_buffer_keymaps = {
+          refresh = "r",
+          kill = "d",
+        },
+      })
+      assert.equals("r", ps.config.ps_buffer_keymaps.refresh)
+      assert.equals("d", ps.config.ps_buffer_keymaps.kill)
+      assert.equals("K", ps.config.ps_buffer_keymaps.inspect)
+      assert.equals("F", ps.config.ps_buffer_keymaps.filter)
+      assert.equals("P", ps.config.ps_buffer_keymaps.pin)
+      assert.equals("O", ps.config.ps_buffer_keymaps.port)
+    end)
+
+    it("should allow disabling a keymap by setting it to false", function()
+      ps.setup({
+        ps_buffer_keymaps = {
+          open_proc = false,
+        },
+      })
+      assert.equals(false, ps.config.ps_buffer_keymaps.open_proc)
+      assert.equals("R", ps.config.ps_buffer_keymaps.refresh)
+    end)
+
+    it("should provide default inspector and lsof keymaps", function()
+      ps.setup()
+      assert.is_table(ps.config.inspector_keymaps)
+      assert.equals("X", ps.config.inspector_keymaps.kill)
+      assert.equals("R", ps.config.inspector_keymaps.refresh)
+      assert.equals("q", ps.config.inspector_keymaps.quit)
+      assert.equals("gx", ps.config.inspector_keymaps.open_url)
+
+      assert.is_table(ps.config.lsof_keymaps)
+      assert.equals("R", ps.config.lsof_keymaps.refresh)
+      assert.equals("X", ps.config.lsof_keymaps.kill)
+      assert.equals("K", ps.config.lsof_keymaps.inspect)
+      assert.equals("f", ps.config.lsof_keymaps.filter)
+      assert.equals("q", ps.config.lsof_keymaps.quit)
+    end)
+
+    it("should allow customizing inspector_keymaps independently", function()
+      ps.setup({
+        inspector_keymaps = {
+          kill = "K",
+          open_url = "gl",
+        },
+      })
+      assert.equals("K", ps.config.inspector_keymaps.kill)
+      assert.equals("gl", ps.config.inspector_keymaps.open_url)
+      assert.equals("R", ps.config.inspector_keymaps.refresh)
+      assert.equals("q", ps.config.inspector_keymaps.quit)
+    end)
+
+    it("should allow customizing lsof_keymaps independently", function()
+      local lsof = require("ps.lsof")
+      ps.setup({
+        lsof_keymaps = {
+          refresh = "r",
+          filter = "F",
+        },
+      })
+      assert.equals("r", ps.config.lsof_keymaps.refresh)
+      assert.equals("F", ps.config.lsof_keymaps.filter)
+      assert.equals("X", ps.config.lsof_keymaps.kill)
+      assert.equals("r", lsof.config.keymaps.refresh)
+      assert.equals("F", lsof.config.keymaps.filter)
+    end)
+  end)
 end)

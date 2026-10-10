@@ -14,6 +14,42 @@ return {
       
       -- Optional: customize PID extraction regex
       -- regex_rule = [[\w\+\s\+\zs\d\+\ze]],
+
+      -- Optional: customize default sorting ("mem", "cpu", or nil)
+      -- default_sort = "mem",
+
+      -- Optional: customize keymaps for the ps buffer
+      -- ps_buffer_keymaps = {
+      --   refresh = "R",
+      --   kill = "X",
+      --   inspect = "K",
+      --   open_proc = "p",
+      --   quit = "q",
+      --   filter = "F",
+      --   pin = "P",
+      --   port = "O",
+      --   sort_cpu = "gC",
+      --   sort_mem = "gm",
+      --   auto_reload = "gl",
+      --   help = "g?",
+      -- },
+
+      -- Optional: customize keymaps for the lsof buffer
+      -- lsof_keymaps = {
+      --   refresh = "R",
+      --   kill = "X",
+      --   inspect = "K",
+      --   filter = "f",
+      --   quit = "q",
+      -- },
+
+      -- Optional: customize keymaps for the process inspector buffer
+      -- inspector_keymaps = {
+      --   kill = "X",
+      --   refresh = "R",
+      --   quit = "q",
+      --   open_url = "gx",
+      -- },
     })
 
     -- Optional: Create a keybinding to open PS

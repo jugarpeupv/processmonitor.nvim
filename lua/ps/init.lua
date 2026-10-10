@@ -1,11 +1,41 @@
 local M = {}
 
-M.config = {
+local default_config = {
 	ps_cmd = "ps aux",
 	kill_cmd = "kill -9",
 	regex_rule = [[\w\+\s\+\zs\d\+\ze]],
 	default_sort = "mem", -- nil, "cpu", or "mem"
+	ps_buffer_keymaps = {
+		refresh = "R",
+		kill = "X",
+		inspect = "K",
+		open_proc = "p",
+		quit = "q",
+		filter = "F",
+		pin = "P",
+		port = "O",
+		sort_cpu = "gC",
+		sort_mem = "gm",
+		auto_reload = "gl",
+		help = "g?",
+	},
+	lsof_keymaps = {
+		refresh = "R",
+		kill = "X",
+		inspect = "K",
+		filter = "f",
+		quit = "q",
+	},
+	inspector_keymaps = {
+		kill = "X",
+		refresh = "R",
+		quit = "q",
+		open_url = "gx",
+	},
 }
+
+M.config = vim.deepcopy(default_config)
+M.config.keymaps = M.config.ps_buffer_keymaps
 
 local state = {
 	bufnr = nil,
@@ -22,10 +52,43 @@ local state = {
 	port_to_pids = {}, -- { [port] = { [pid]=true } }
 }
 
+local apply_keymaps
+
 function M.setup(opts)
-	M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+	opts = opts or {}
+	local merged_opts = vim.deepcopy(opts)
+
+	if merged_opts.keymaps and not merged_opts.ps_buffer_keymaps then
+		merged_opts.ps_buffer_keymaps = merged_opts.keymaps
+	end
+	if merged_opts.lsof_buffer_keymaps and not merged_opts.lsof_keymaps then
+		merged_opts.lsof_keymaps = merged_opts.lsof_buffer_keymaps
+	end
+	if merged_opts.inspector_buffer_keymaps and not merged_opts.inspector_keymaps then
+		merged_opts.inspector_keymaps = merged_opts.inspector_buffer_keymaps
+	end
+
+	M.config = vim.tbl_deep_extend("force", vim.deepcopy(default_config), merged_opts)
+	M.config.keymaps = M.config.ps_buffer_keymaps
+
 	require("ps.syntax").setup()
 	require("ps.lsof_syntax").setup()
+
+	local lsof_mod = require("ps.lsof")
+	if lsof_mod.setup then
+		lsof_mod.setup({
+			lsof_cmd = opts.lsof_cmd,
+			kill_cmd = M.config.kill_cmd,
+			regex_rule = M.config.regex_rule,
+			keymaps = M.config.lsof_keymaps,
+			lsof_keymaps = M.config.lsof_keymaps,
+			inspector_keymaps = M.config.inspector_keymaps,
+		})
+	end
+
+	if state.bufnr and vim.api.nvim_buf_is_valid(state.bufnr) and apply_keymaps then
+		apply_keymaps(state.bufnr)
+	end
 end
 
 local function get_pid_from_line(line)
@@ -352,10 +415,29 @@ local function refresh()
 	end
 
 	-- Add keymap hints to the status line
-	table.insert(
-		status_parts,
-		"R:refresh | X:kill | K:inspect | F:filter | P:pin | O:port | gC:sort CPU | gm:sort MEM | gl:auto-reload | g?:help | q:quit"
-	)
+	local km = M.config.ps_buffer_keymaps or M.config.keymaps or {}
+	local hint_items = {}
+	local function add_hint(key, label)
+		if key and key ~= false and key ~= "" then
+			table.insert(hint_items, key .. ":" .. label)
+		end
+	end
+
+	add_hint(km.refresh, "refresh")
+	add_hint(km.kill, "kill")
+	add_hint(km.inspect, "inspect")
+	add_hint(km.filter, "filter")
+	add_hint(km.pin, "pin")
+	add_hint(km.port, "port")
+	add_hint(km.sort_cpu, "sort CPU")
+	add_hint(km.sort_mem, "sort MEM")
+	add_hint(km.auto_reload, "auto-reload")
+	add_hint(km.help, "help")
+	add_hint(km.quit, "quit")
+
+	if #hint_items > 0 then
+		table.insert(status_parts, table.concat(hint_items, " | "))
+	end
 
 	local header_line = "[ " .. table.concat(status_parts, " | ") .. " ]"
 
@@ -467,7 +549,10 @@ local function toggle_pid_filter()
 
 	-- Set PID filter
 	state.pid_filter = pid
-	vim.notify("Filtering by PID: " .. pid .. " (Press 'P' again to clear)", vim.log.levels.INFO)
+	local km = M.config.ps_buffer_keymaps or M.config.keymaps or {}
+	local pin_key = km.pin or "P"
+	local pin_hint = (pin_key and pin_key ~= false and pin_key ~= "") and (" (Press '" .. pin_key .. "' again to clear)") or ""
+	vim.notify("Filtering by PID: " .. pid .. pin_hint, vim.log.levels.INFO)
 	refresh()
 end
 
@@ -486,7 +571,10 @@ local function set_port_filter()
 		elseif input:match("^%d+$") then
 			state.port_filter = input
 			refresh()
-			vim.notify("Filtering by port: " .. input .. " (Press 'F' again to clear)", vim.log.levels.INFO)
+			local km = M.config.ps_buffer_keymaps or M.config.keymaps or {}
+			local port_key = km.port or "O"
+			local port_hint = (port_key and port_key ~= false and port_key ~= "") and (" (Press '" .. port_key .. "' again to clear)") or ""
+			vim.notify("Filtering by port: " .. input .. port_hint, vim.log.levels.INFO)
 		else
 			vim.notify("Invalid port: enter a number or leave empty to clear", vim.log.levels.WARN)
 		end
@@ -505,9 +593,12 @@ local function sort_by_mem()
 	vim.notify("Sorted by memory usage (highest first)", vim.log.levels.INFO)
 end
 
-local function inspect_process()
-	local line = vim.api.nvim_get_current_line()
-	local pid = get_pid_from_line(line)
+local function inspect_process(target_pid)
+	local pid = target_pid
+	if not pid or pid == "" then
+		local line = vim.api.nvim_get_current_line()
+		pid = get_pid_from_line(line)
+	end
 
 	if not pid or pid == "" then
 		vim.notify("No valid PID found", vim.log.levels.ERROR)
@@ -742,12 +833,27 @@ local function inspect_process()
 	end
 
 	-- Actions
+	local ikm = M.config.inspector_keymaps or {}
+	local k_kill = (ikm.kill and ikm.kill ~= false and ikm.kill ~= "") and ikm.kill or nil
+	local k_refresh = (ikm.refresh and ikm.refresh ~= false and ikm.refresh ~= "") and ikm.refresh or nil
+	local k_quit = (ikm.quit and ikm.quit ~= false and ikm.quit ~= "") and ikm.quit or nil
+	local k_open_url = (ikm.open_url and ikm.open_url ~= false and ikm.open_url ~= "") and ikm.open_url
+		or ((ikm.browser and ikm.browser ~= false and ikm.browser ~= "") and ikm.browser or nil)
+
 	table.insert(content, "⌨️  ACTIONS")
 	table.insert(content, "═══════════════════")
-	table.insert(content, "  X  - Kill this process")
-	table.insert(content, "  R  - Refresh inspector")
-	table.insert(content, "  q  - Close this window")
-	table.insert(content, "  gx - Open port in browser (when cursor on network connection)")
+	if k_kill then
+		table.insert(content, string.format("  %-2s - Kill this process", k_kill))
+	end
+	if k_refresh then
+		table.insert(content, string.format("  %-2s - Refresh inspector", k_refresh))
+	end
+	if k_quit then
+		table.insert(content, string.format("  %-2s - Close this window", k_quit))
+	end
+	if k_open_url then
+		table.insert(content, string.format("  %-2s - Open port in browser (when cursor on network connection)", k_open_url))
+	end
 	table.insert(content, "")
 
 	-- Set the content
@@ -762,67 +868,91 @@ local function inspect_process()
 
 	-- Set up keymaps for the inspection buffer
 	local opts = { noremap = true, silent = true, buffer = bufnr }
-	vim.keymap.set("n", "X", function()
-		if kill_process(pid) then
-			vim.notify("Process " .. pid .. " killed. Closing inspector.", vim.log.levels.INFO)
-			vim.defer_fn(function()
-				if vim.api.nvim_buf_is_valid(bufnr) then
-					vim.cmd("close")
-				end
-			end, 500)
-		end
-	end, opts)
-	vim.keymap.set("n", "R", function()
-		vim.cmd("close")
-		inspect_process()
-	end, opts)
-	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
-	vim.keymap.set("n", "gx", function()
-		local line = vim.api.nvim_get_current_line()
-		-- Match patterns like [::1]:4873, localhost:8080, 127.0.0.1:3000, *:8080, etc.
-		local port = line:match("]:%d+") or line:match(":%d+")
-		if port then
-			port = port:match("%d+")
-			local url = "http://localhost:" .. port
-			vim.notify("Opening " .. url .. " in browser...", vim.log.levels.INFO)
-			vim.fn.jobstart({ "open", url }, { detach = true })
-		else
-			vim.notify("No port found on current line", vim.log.levels.WARN)
-		end
-	end, opts)
+	if k_kill then
+		vim.keymap.set("n", k_kill, function()
+			if kill_process(pid) then
+				vim.notify("Process " .. pid .. " killed. Closing inspector.", vim.log.levels.INFO)
+				vim.defer_fn(function()
+					if vim.api.nvim_buf_is_valid(bufnr) then
+						vim.cmd("close")
+					end
+				end, 500)
+			end
+		end, opts)
+	end
+	if k_refresh then
+		vim.keymap.set("n", k_refresh, function()
+			vim.cmd("close")
+			inspect_process(pid)
+		end, opts)
+	end
+	if k_quit then
+		vim.keymap.set("n", k_quit, "<cmd>q!<CR>", opts)
+	end
+	if k_open_url then
+		vim.keymap.set("n", k_open_url, function()
+			local line = vim.api.nvim_get_current_line()
+			-- Match patterns like [::1]:4873, localhost:8080, 127.0.0.1:3000, *:8080, etc.
+			local port = line:match("]:%d+") or line:match(":%d+")
+			if port then
+				port = port:match("%d+")
+				local url = "http://localhost:" .. port
+				vim.notify("Opening " .. url .. " in browser...", vim.log.levels.INFO)
+				vim.fn.jobstart({ "open", url }, { detach = true })
+			else
+				vim.notify("No port found on current line", vim.log.levels.WARN)
+			end
+		end, opts)
+	end
 end
 
 local function show_help()
+	local km = M.config.ps_buffer_keymaps or M.config.keymaps or {}
+	local k_refresh = (km.refresh and km.refresh ~= false) and km.refresh or "-"
+	local k_autoreload = (km.auto_reload and km.auto_reload ~= false) and km.auto_reload or "-"
+	local k_filter = (km.filter and km.filter ~= false) and km.filter or "-"
+	local k_pin = (km.pin and km.pin ~= false) and km.pin or "-"
+	local k_port = (km.port and km.port ~= false) and km.port or "-"
+	local k_sort_cpu = (km.sort_cpu and km.sort_cpu ~= false) and km.sort_cpu or "-"
+	local k_sort_mem = (km.sort_mem and km.sort_mem ~= false) and km.sort_mem or "-"
+	local k_kill = (km.kill and km.kill ~= false) and km.kill or "-"
+	local k_kill_v = (km.kill_visual and km.kill_visual ~= false) and km.kill_visual or k_kill
+	local k_inspect = (km.inspect and km.inspect ~= false) and km.inspect or "-"
+	local k_proc = (km.open_proc and km.open_proc ~= false) and km.open_proc
+		or ((km.proc and km.proc ~= false) and km.proc or "-")
+	local k_help = (km.help and km.help ~= false) and km.help or "g?"
+	local k_quit = (km.quit and km.quit ~= false) and km.quit or "q"
+
 	-- Define help content with keymaps and descriptions
 	local help_lines = {
 		"╔══════════════════════════════════════════════════════════════════════╗",
 		"║                     PROCESS MONITOR - KEYBINDINGS                    ║",
 		"╚══════════════════════════════════════════════════════════════════════╝",
 		"",
-	"  REFRESH & VIEW",
-	"  ──────────────",
-	"  R       - Refresh the process list",
-	"  gl      - Toggle auto-reload (every 2 seconds)",
-	"  F       - Set/clear text filter",
-	"  P       - Toggle PID filter (pin/unpin current process)",
-	"  O       - Filter by port number (shows processes on that port)",
-	"  gC      - Sort by CPU usage (highest first)",
-	"  gm      - Sort by memory usage (highest first)",
+		"  REFRESH & VIEW",
+		"  ──────────────",
+		string.format("  %-7s - Refresh the process list", k_refresh),
+		string.format("  %-7s - Toggle auto-reload (every 2 seconds)", k_autoreload),
+		string.format("  %-7s - Set/clear text filter", k_filter),
+		string.format("  %-7s - Toggle PID filter (pin/unpin current process)", k_pin),
+		string.format("  %-7s - Filter by port number (shows processes on that port)", k_port),
+		string.format("  %-7s - Sort by CPU usage (highest first)", k_sort_cpu),
+		string.format("  %-7s - Sort by memory usage (highest first)", k_sort_mem),
 		"",
 		"  PROCESS ACTIONS",
 		"  ───────────────",
-		"  X       - Kill process on current line",
-		"  X       - (Visual mode) Kill multiple selected processes",
-		"  K       - Inspect process details (detailed view)",
-		"  p       - Open /proc/<pid> directory (Linux only)",
+		string.format("  %-7s - Kill process on current line", k_kill),
+		string.format("  %-7s - (Visual mode) Kill multiple selected processes", k_kill_v),
+		string.format("  %-7s - Inspect process details (detailed view)", k_inspect),
+		string.format("  %-7s - Open /proc/<pid> directory (Linux only)", k_proc),
 		"",
 		"  HELP & EXIT",
 		"  ───────────",
-		"  g?      - Show this help",
-		"  q       - Close the process monitor",
+		string.format("  %-7s - Show this help", k_help),
+		string.format("  %-7s - Close the process monitor", k_quit),
 		"",
 		"",
-		"  Press 'q' or <Esc> to close this help window",
+		string.format("  Press '%s' or <Esc> to close this help window", k_quit),
 		"",
 	}
 
@@ -861,9 +991,13 @@ local function show_help()
 
 	-- Set up keymaps to close the help window
 	local close_opts = { noremap = true, silent = true, buffer = buf }
-	vim.keymap.set("n", "q", "<cmd>close<CR>", close_opts)
 	vim.keymap.set("n", "<Esc>", "<cmd>close<CR>", close_opts)
-	vim.keymap.set("n", "g?", "<cmd>close<CR>", close_opts)
+	if k_quit ~= "-" and k_quit ~= "" then
+		vim.keymap.set("n", k_quit, "<cmd>close<CR>", close_opts)
+	end
+	if k_help ~= "-" and k_help ~= "" and k_help ~= k_quit then
+		vim.keymap.set("n", k_help, "<cmd>close<CR>", close_opts)
+	end
 end
 
 local function toggle_auto_reload()
@@ -908,26 +1042,19 @@ local function toggle_auto_reload()
 	end
 end
 
-local function setup_buffer()
-	local bufnr = vim.api.nvim_create_buf(true, false)
-	state.bufnr = bufnr
-
-	vim.bo[bufnr].buftype = "nofile"
-	vim.bo[bufnr].bufhidden = "hide"
-	vim.bo[bufnr].swapfile = false
-	vim.api.nvim_buf_set_name(bufnr, "processmonitor://ps")
-	vim.bo[bufnr].filetype = "ps"
-
-	-- Apply syntax highlighting immediately
-	vim.api.nvim_buf_call(bufnr, function()
-		require("ps.syntax").apply()
-	end)
-
+apply_keymaps = function(bufnr)
 	local opts = { noremap = true, silent = true, buffer = bufnr }
+	local km = M.config.ps_buffer_keymaps or M.config.keymaps or {}
 
-	vim.keymap.set("n", "R", refresh, opts)
-	vim.keymap.set("n", "X", kill_line, opts)
-	vim.keymap.set("v", "X", function()
+	local map = function(mode, lhs, rhs)
+		if lhs and lhs ~= false and lhs ~= "" then
+			vim.keymap.set(mode, lhs, rhs, opts)
+		end
+	end
+
+	map("n", km.refresh, refresh)
+	map("n", km.kill, kill_line)
+	map("v", km.kill_visual or km.kill, function()
 		-- Get visual selection before exiting
 		local start_line = vim.fn.line("v")
 		local end_line = vim.fn.line(".")
@@ -960,17 +1087,35 @@ local function setup_buffer()
 		else
 			vim.notify("No processes were killed", vim.log.levels.WARN)
 		end
-	end, opts)
-	vim.keymap.set("n", "K", inspect_process, opts)
-	vim.keymap.set("n", "p", open_proc_line, opts)
-	vim.keymap.set("n", "q", "<cmd>q!<CR>", opts)
-	vim.keymap.set("n", "F", set_filter, opts)
-	vim.keymap.set("n", "P", toggle_pid_filter, opts)
-	vim.keymap.set("n", "O", set_port_filter, opts)
-	vim.keymap.set("n", "gC", sort_by_cpu, opts)
-	vim.keymap.set("n", "gm", sort_by_mem, opts)
-	vim.keymap.set("n", "gl", toggle_auto_reload, opts)
-	vim.keymap.set("n", "g?", show_help, opts)
+	end)
+	map("n", km.inspect, inspect_process)
+	map("n", km.open_proc or km.proc, open_proc_line)
+	map("n", km.quit, "<cmd>q!<CR>")
+	map("n", km.filter, set_filter)
+	map("n", km.pin, toggle_pid_filter)
+	map("n", km.port, set_port_filter)
+	map("n", km.sort_cpu, sort_by_cpu)
+	map("n", km.sort_mem, sort_by_mem)
+	map("n", km.auto_reload, toggle_auto_reload)
+	map("n", km.help, show_help)
+end
+
+local function setup_buffer()
+	local bufnr = vim.api.nvim_create_buf(true, false)
+	state.bufnr = bufnr
+
+	vim.bo[bufnr].buftype = "nofile"
+	vim.bo[bufnr].bufhidden = "hide"
+	vim.bo[bufnr].swapfile = false
+	vim.api.nvim_buf_set_name(bufnr, "processmonitor://ps")
+	vim.bo[bufnr].filetype = "ps"
+
+	-- Apply syntax highlighting immediately
+	vim.api.nvim_buf_call(bufnr, function()
+		require("ps.syntax").apply()
+	end)
+
+	apply_keymaps(bufnr)
 
 	-- Clean up auto-reload timer when buffer is closed
 	vim.api.nvim_create_autocmd("BufWipeout", {
@@ -1076,8 +1221,28 @@ function M.set_port_filter()
 	set_port_filter()
 end
 
-function M.inspect_process()
-	inspect_process()
+function M.toggle_pid_filter()
+	toggle_pid_filter()
+end
+
+function M.sort_by_cpu()
+	sort_by_cpu()
+end
+
+function M.sort_by_mem()
+	sort_by_mem()
+end
+
+function M.toggle_auto_reload()
+	toggle_auto_reload()
+end
+
+function M.show_help()
+	show_help()
+end
+
+function M.inspect_process(target_pid)
+	inspect_process(target_pid)
 end
 
 return M

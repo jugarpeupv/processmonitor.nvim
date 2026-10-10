@@ -31,8 +31,18 @@ Video with a demo: https://www.youtube.com/watch?v=2WDSGvltxHo
   config = function()
     require("ps").setup({
       -- Optional configuration
-      ps_cmd = "ps aux",        -- Command to list processes
-      kill_cmd = "kill -9",     -- Command to kill processes
+      ps_cmd = "ps aux",             -- Command to list processes
+      kill_cmd = "kill -9",          -- Command to kill processes
+      default_sort = "mem",          -- Default sort: "mem", "cpu", or nil
+      ps_buffer_keymaps = {
+        -- Override any default PS buffer keymaps here
+      },
+      lsof_keymaps = {
+        -- Override any default LSOF buffer keymaps here
+      },
+      inspector_keymaps = {
+        -- Override any default Inspector buffer keymaps here
+      },
     })
   end,
 }
@@ -65,6 +75,7 @@ use {
 | `:PsInspect` | Open detailed inspector for current process |
 | `:PsOpenProcLine` | Open `/proc` directory for the process |
 | `:PsFilter` | Set a filter to show only matching processes |
+| `:PsPortFilter` | Filter processes by network port |
 | `:PsThisBuffer` | Convert current buffer to ps buffer |
 
 #### Open Files Management (lsof)
@@ -79,29 +90,36 @@ use {
 
 #### PS Buffer
 
+The buffer header displays the current state and available shortcuts:
+
+```
+[ AUTO-RELOAD: OFF | R:refresh | X:kill | K:inspect | F:filter | P:pin | O:port | gC:sort CPU | gm:sort MEM | gl:auto-reload | g?:help | q:quit ]
+```
+
 When in a ps buffer:
 
 ##### Normal Mode
 
-| Key | Action |
-| --- | ------ |
-| `r` | Refresh process list |
-| `K` | Kill process on current line |
-| `I` | Inspect process (detailed view) |
-| `p` | Open `/proc` directory for process |
-| `q` | Close buffer |
-| `f` | Filter processes by name |
-| `F` | Toggle PID filter (pin/unpin current process) |
-| `gC` | Sort by CPU usage (highest first) |
-| `gm` | Sort by memory usage (highest first) |
-| `gl` | Toggle auto-reload (every 2 seconds) |
-| `g?` | Show help with all keybindings |
+| Key | Action | Description |
+| --- | ------ | ----------- |
+| `R` | `refresh` | Refresh the process list |
+| `X` | `kill` | Kill process on current line |
+| `K` | `inspect` | Inspect process (detailed view) |
+| `F` | `filter` | Set/clear text filter |
+| `P` | `pin` | Toggle PID filter (pin/unpin current process) |
+| `O` | `port` | Filter by port number (shows processes on that port) |
+| `gC` | `sort_cpu` | Sort by CPU usage (highest first) |
+| `gm` | `sort_mem` | Sort by memory usage (highest first) |
+| `gl` | `auto_reload` | Toggle auto-reload (every 2 seconds) |
+| `g?` | `help` | Show help window with keybindings |
+| `p` | `open_proc` | Open `/proc/<pid>` directory (Linux only) |
+| `q` | `quit` | Close buffer |
 
 ##### Visual Mode
 
-| Key | Action |
-| --- | ------ |
-| `K` | Kill all processes in selection |
+| Key | Action | Description |
+| --- | ------ | ----------- |
+| `X` | `kill` | Kill all processes in selection |
 
 #### LSOF Buffer
 
@@ -109,24 +127,32 @@ When in an lsof buffer:
 
 ##### Normal Mode
 
-| Key | Action |
-| --- | ------ |
-| `r` | Refresh lsof output |
-| `q` | Close buffer |
-| `f` | Filter lsof output |
+| Key | Action | Description |
+| --- | ------ | ----------- |
+| `R` | `refresh` | Refresh lsof output |
+| `X` | `kill` | Kill process on current line |
+| `K` | `inspect` | Inspect process (detailed view) |
+| `f` | `filter` | Filter lsof output |
+| `q` | `quit` | Close buffer |
+
+##### Visual Mode
+
+| Key | Action | Description |
+| --- | ------ | ----------- |
+| `X` | `kill` | Kill all processes in selection |
 
 #### Process Inspector Buffer
 
-When viewing detailed process information (opened with `I` or `:PsInspect`):
+When viewing detailed process information (opened with `K` or `:PsInspect`):
 
 ##### Normal Mode
 
-| Key | Action |
-| --- | ------ |
-| `r` | Refresh inspector |
-| `K` | Kill the inspected process |
-| `q` | Close inspector window |
-| `gx` | Open port in browser (when cursor is on a network connection line) |
+| Key | Action | Description |
+| --- | ------ | ----------- |
+| `R` | `refresh` | Refresh inspector |
+| `X` | `kill` | Kill the inspected process |
+| `q` | `quit` | Close inspector window |
+| `gx` | `open_url` | Open port in browser (when cursor is on a network connection line) |
 
 The `gx` keymap is particularly useful when inspecting processes with network connections. Position your cursor on any line showing a network connection (e.g., `TCP [::1]:4873 (LISTEN)`) and press `gx` to automatically open `http://localhost:<port>` in your default browser.
 
@@ -136,12 +162,12 @@ The `gx` keymap is particularly useful when inspecting processes with network co
 
 You can filter the process list by name or other text:
 
-1. Press `f` in the ps buffer
+1. Press `F` in the ps buffer
 2. Enter a search term (e.g., "node" to see all Node.js processes)
 3. Press Enter
 
 To clear the filter:
-1. Press `f`
+1. Press `F`
 2. Clear the input and press Enter
 
 The filter is case-insensitive and searches across the entire process line.
@@ -151,11 +177,23 @@ The filter is case-insensitive and searches across the entire process line.
 You can filter to show only a specific process by PID:
 
 1. Move cursor to the line with the process you want to pin
-2. Press `F` to toggle the PID filter
+2. Press `P` to toggle the PID filter
 3. The view will now show only that specific process
-4. Press `F` again to clear the filter
+4. Press `P` again to clear the filter
 
 When a PID filter is active, it will be shown in the status bar at the top of the buffer.
+
+#### Port Filter
+
+You can filter processes by network port:
+
+1. Press `O` in the ps buffer
+2. Enter a port number (e.g., "3000" or "8080")
+3. Press Enter to show processes listening or connecting on that port
+
+To clear the port filter:
+1. Press `O`
+2. Leave the input empty and press Enter
 
 ### Sorting
 
@@ -164,7 +202,7 @@ You can sort the process list by different criteria:
 - **Sort by CPU**: Press `gC` to sort processes by CPU usage (highest first)
 - **Sort by Memory**: Press `gm` to sort processes by memory/RSS usage (highest first)
 
-The sort order persists when you refresh the list with `r`. To return to the default order, close and reopen the buffer.
+The sort order persists when you refresh the list with `R`. To return to the default order, close and reopen the buffer.
 
 ## Configuration
 
@@ -175,6 +213,87 @@ require("ps").setup({
   ps_cmd = "ps aux",           -- Command to list processes
   kill_cmd = "kill -9",        -- Command to kill processes (SIGKILL)
   regex_rule = [[\w\+\s\+\zs\d\+\ze]], -- Regex to extract PID from line
+  default_sort = "mem",        -- Default sort order: nil, "cpu", or "mem"
+
+  -- 1. PS Buffer Keymaps
+  ps_buffer_keymaps = {
+    refresh = "R",             -- Refresh process list
+    kill = "X",                -- Kill process (normal and visual mode)
+    inspect = "K",             -- Inspect process details
+    open_proc = "p",           -- Open /proc/<pid> (Linux)
+    quit = "q",                -- Close buffer
+    filter = "F",              -- Filter processes by text
+    pin = "P",                 -- Pin/filter by PID
+    port = "O",                -- Filter by port number
+    sort_cpu = "gC",           -- Sort by CPU usage
+    sort_mem = "gm",           -- Sort by memory usage
+    auto_reload = "gl",        -- Toggle auto-reload
+    help = "g?",               -- Show keybinding help
+  },
+
+  -- 2. LSOF Buffer Keymaps
+  lsof_keymaps = {
+    refresh = "R",             -- Refresh lsof list
+    kill = "X",                -- Kill process (normal and visual mode)
+    inspect = "K",             -- Inspect process
+    filter = "f",              -- Filter lsof output
+    quit = "q",                -- Close lsof buffer
+  },
+
+  -- 3. Process Inspector Buffer Keymaps
+  inspector_keymaps = {
+    refresh = "R",             -- Refresh inspector
+    kill = "X",                -- Kill inspected process
+    quit = "q",                -- Close inspector window
+    open_url = "gx",           -- Open port in browser
+  },
+})
+```
+
+### Customizing Keymaps
+
+Each buffer has its own dedicated keymap table:
+- `ps_buffer_keymaps`: Keybindings for the main PS process buffer
+- `lsof_keymaps`: Keybindings for the LSOF buffer
+- `inspector_keymaps`: Keybindings for the process inspector buffer
+
+Any keymap omitted from your configuration will use its default value. Custom PS keymaps are automatically reflected in the buffer's status line header and help popup (`g?`). Custom Inspector keymaps are automatically shown in its `ACTIONS` header.
+
+```lua
+require("ps").setup({
+  -- Customize PS buffer keymaps
+  ps_buffer_keymaps = {
+    refresh = "r",   -- Use lowercase 'r' for refresh
+    kill = "d",      -- Use 'd' to kill process
+    filter = "/",    -- Use '/' to filter
+    pin = "<C-p>",   -- Pin process with Ctrl+p
+  },
+
+  -- Customize LSOF buffer keymaps
+  lsof_keymaps = {
+    refresh = "r",
+    filter = "/",
+  },
+
+  -- Customize Process Inspector keymaps
+  inspector_keymaps = {
+    kill = "d",
+    refresh = "r",
+    open_url = "go",
+  },
+})
+```
+
+To disable any specific keymap, set it to `false`:
+
+```lua
+require("ps").setup({
+  ps_buffer_keymaps = {
+    open_proc = false, -- Disable opening /proc
+  },
+  inspector_keymaps = {
+    kill = false,      -- Disable killing from inspector
+  },
 })
 ```
 
