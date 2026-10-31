@@ -1,5 +1,7 @@
 local M = {}
 
+local detail = require("ps.detail")
+
 local default_config = {
 	lsof_cmd = "lsof -i -n -P",
 	kill_cmd = "kill -9",
@@ -172,7 +174,8 @@ local function set_filter()
 	end)
 end
 
-local function inspect_process(target_pid)
+local function inspect_process(target_pid, open_mode)
+	open_mode = open_mode or "vsplit"
 	local pid = target_pid
 	if not pid or pid == "" then
 		local line = vim.api.nvim_get_current_line()
@@ -201,32 +204,25 @@ local function inspect_process(target_pid)
 		real_mem = "N/A"
 	end
 
-	-- Get parent process info
-	local parent_info = vim.fn.systemlist("ps -p " .. pid .. " -o ppid=,comm=")
-
-	-- Get child processes (recursive)
-	local all_child_pids = {}
-	local function get_all_children(parent_pid)
-		local direct_children = vim.fn.systemlist("pgrep -P " .. parent_pid .. " 2>/dev/null")
-		for _, child in ipairs(direct_children) do
-			if child ~= "" and tonumber(child) then
-				table.insert(all_child_pids, child)
-				get_all_children(child)
-			end
+	-- Get parent process info (the parent's own PID and command)
+	local parent_ppid = vim.trim(vim.fn.systemlist("ps -p " .. pid .. " -o ppid=")[1] or "")
+	local parent_info = {}
+	if parent_ppid ~= "" then
+		parent_info = vim.fn.systemlist("ps -p " .. parent_ppid .. " -o pid=,comm=")
+		if #parent_info == 0 then
+			parent_info = { parent_ppid }
 		end
 	end
-	get_all_children(pid)
 
-	-- Get network connections - filter by exact PID match using grep
+	-- Get all descendant processes with a single ps call
+	local all_child_pids = detail.descendant_pids(pid)
+
+	-- Get network connections for this process and its descendants
 	local network = {}
-	if #all_child_pids > 0 then
-		local pid_pattern = pid .. "|" .. table.concat(all_child_pids, "|")
-		local network_cmd = "lsof -i -n -P 2>/dev/null | grep -E '^\\S+\\s+(" .. pid_pattern .. ")\\s'"
-		network = vim.fn.systemlist(network_cmd)
-	else
-		local network_cmd = "lsof -i -n -P 2>/dev/null | grep -E '^\\S+\\s+" .. pid .. "\\s'"
-		network = vim.fn.systemlist(network_cmd)
-	end
+	local network_pids = { pid }
+	vim.list_extend(network_pids, all_child_pids)
+	local network_cmd = "lsof -n -P -a -p " .. table.concat(network_pids, ",") .. " -i 2>/dev/null"
+	network = vim.fn.systemlist(network_cmd)
 
 	-- Get open files (limited to first 20)
 	local open_files = vim.fn.systemlist("lsof -p " .. pid .. " 2>/dev/null | head -20")
@@ -285,12 +281,25 @@ local function inspect_process(target_pid)
 	end
 
 	-- Parent process
+	local has_parent = false
 	if parent_info and #parent_info > 0 then
-		table.insert(content, "⬆️  PARENT PROCESS")
+		for _, pinfo in ipairs(parent_info) do
+			local ppid_value = tonumber(pinfo:match("^%s*(%d+)"))
+			if ppid_value and ppid_value > 0 then
+				has_parent = true
+				break
+			end
+		end
+
+		local heading = "⬆️  PARENT PROCESS"
+		if has_parent then
+			heading = heading .. " (<c-v> Open in vsplit, <c-s> Open in split, <cr> Open in place)"
+		end
+		table.insert(content, heading)
 		table.insert(content, "═══════════════════")
 		for _, pinfo in ipairs(parent_info) do
 			if pinfo ~= "" then
-				table.insert(content, "PPID: " .. pinfo)
+				table.insert(content, "PPID: " .. vim.trim(pinfo))
 			end
 		end
 		table.insert(content, "")
@@ -300,11 +309,12 @@ local function inspect_process(target_pid)
 	if #all_child_pids > 0 then
 		table.insert(content, "⬇️  CHILD PROCESSES (" .. #all_child_pids .. ")")
 		table.insert(content, "═══════════════════")
-		for _, child in ipairs(all_child_pids) do
-			local child_info = vim.fn.systemlist("ps -p " .. child .. " -o pid,comm")
-			for _, child_line in ipairs(child_info) do
-				table.insert(content, child_line)
-			end
+		table.insert(content, string.format("%5s %s", "PID", "COMMAND"))
+		local child_info = vim.fn.systemlist(
+			"ps -p " .. table.concat(all_child_pids, ",") .. " -o pid=,comm= 2>/dev/null"
+		)
+		for _, child_line in ipairs(child_info) do
+			table.insert(content, (child_line:gsub("%s+$", "")))
 		end
 		table.insert(content, "")
 	end
@@ -368,10 +378,22 @@ local function inspect_process(target_pid)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, content)
 	vim.bo[bufnr].modifiable = false
 
-	-- Open the buffer in a new split
-	vim.cmd("belowright vsplit")
-	vim.api.nvim_win_set_buf(0, bufnr)
+	-- Open the buffer in a new split, or reuse the current window for in-place navigation
+	if open_mode == "replace" then
+		vim.api.nvim_win_set_buf(0, bufnr)
+	elseif open_mode == "split" then
+		vim.cmd("belowright split")
+		vim.api.nvim_win_set_buf(0, bufnr)
+	else
+		vim.cmd("belowright vsplit")
+		vim.api.nvim_win_set_buf(0, bufnr)
+	end
 	vim.wo.wrap = false
+
+	-- Enable parent process navigation shortcuts (cursor on the PPID line)
+	if has_parent then
+		detail.attach_parent_keys(bufnr, inspect_process)
+	end
 
 	-- Set up keymaps for the inspection buffer
 	local opts = { noremap = true, silent = true, buffer = bufnr }
@@ -389,8 +411,12 @@ local function inspect_process(target_pid)
 	end
 	if k_refresh then
 		vim.keymap.set("n", k_refresh, function()
-			vim.cmd("close")
-			inspect_process(pid)
+			if open_mode == "replace" then
+				inspect_process(pid, "replace")
+			else
+				vim.cmd("close")
+				inspect_process(pid, open_mode)
+			end
 		end, opts)
 	end
 	if k_quit then

@@ -153,8 +153,13 @@ When viewing detailed process information (opened with `K` or `:PsInspect`):
 | `X` | `kill` | Kill the inspected process |
 | `q` | `quit` | Close inspector window |
 | `gx` | `open_url` | Open port in browser (when cursor is on a network connection line) |
+| `<C-v>` | – | Open the parent process in a vertical split (cursor on the `PPID:` line) |
+| `<C-s>` | – | Open the parent process in a horizontal split (cursor on the `PPID:` line) |
+| `<CR>` | – | Open the parent process in the current window (cursor on the `PPID:` line) |
 
 The `gx` keymap is particularly useful when inspecting processes with network connections. Position your cursor on any line showing a network connection (e.g., `TCP [::1]:4873 (LISTEN)`) and press `gx` to automatically open `http://localhost:<port>` in your default browser.
+
+The `PARENT PROCESS` heading shows the available shortcuts: `<c-v>` opens the parent in a vertical split, `<c-s>` in a horizontal split, and `<cr>` in the current window. Place the cursor on the `PPID: ...` line to use them.
 
 ### Filtering
 

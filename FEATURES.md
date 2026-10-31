@@ -17,6 +17,7 @@
 - ✅ Show help with `g?` key
 - ✅ Open `/proc` filesystem with `p` key
 - ✅ Close buffer with `q` key
+- ✅ Navigate to the parent process from the inspector with `<CR>`, `<C-v>`, or `<C-s>`
 - ✅ Customizable keymaps for ps buffer, lsof buffer, and process inspector buffer
 
 ### Implementation Details
